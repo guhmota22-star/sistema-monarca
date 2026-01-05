@@ -15,27 +15,9 @@ st.markdown("""
     <style>
     .stApp { background-color: #050505; color: #e0e0e0; font-family: 'Orbitron', sans-serif; }
     h1, h2, h3 { color: #00d4ff; text-shadow: 0 0 10px #00d4ff; }
-    
-    [data-baseweb="tab-list"] {
-        gap: 8px !important;
-        display: flex !important;
-        flex-wrap: wrap !important;
-        justify-content: center !important;
-    }
-    button[data-baseweb="tab"] {
-        font-size: 12px !important;
-        padding: 8px 12px !important;
-        border: 1px solid rgba(0, 212, 255, 0.2) !important;
-        border-radius: 5px !important;
-    }
-
-    .system-card {
-        border: 1px solid #00d4ff;
-        padding: 20px;
-        border-radius: 10px;
-        background-color: rgba(0, 212, 255, 0.05);
-        margin-bottom: 10px;
-    }
+    [data-baseweb="tab-list"] { gap: 8px !important; display: flex !important; flex-wrap: wrap !important; justify-content: center !important; }
+    button[data-baseweb="tab"] { font-size: 12px !important; padding: 8px 12px !important; border: 1px solid rgba(0, 212, 255, 0.2) !important; border-radius: 5px !important; }
+    .system-card { border: 1px solid #00d4ff; padding: 20px; border-radius: 10px; background-color: rgba(0, 212, 255, 0.05); margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -67,7 +49,7 @@ def salvar():
 
 def ganhar_xp(valor, stat=None):
     if st.session_state.data["penalidades"]:
-        st.error("🚫 DÍVIDA ATIVA: Cumpra a punição para ganhar XP!")
+        st.error("🚫 DÍVIDA ATIVA: Cumpra a punição primeiro!")
         return
     st.session_state.data["xp"] += valor
     if stat: st.session_state.data["stats"][stat] += 1
@@ -83,19 +65,19 @@ def ganhar_xp(valor, stat=None):
     salvar()
 
 # --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
-api_key = st.secrets.get("GOOGLE_API_KEY") if "GOOGLE_API_KEY" in st.secrets else os.environ.get("GOOGLE_API_KEY")
+# Obtendo a chave de forma segura
+api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Nome padrão que funciona na maioria das versões do SDK
+        # Removido o prefixo 'models/' para evitar erro 404
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        st.error(f"Erro de inicialização: {e}")
+        st.error(f"Erro Oráculo: {e}")
         model = None
 else:
     model = None
-    st.warning("⚠️ Chave API não configurada nos Secrets.")
 
 # --- 4. INTERFACE PRINCIPAL ---
 st.title("🔱 SISTEMA: GUH MOTA")
@@ -109,14 +91,11 @@ def obter_classe(lvl):
 tabs = st.tabs(["📊 STATUS", "🩺 MEDICINA", "🏋️ ACADEMIA", "💀 PUNIÇÕES"])
 
 with tabs[0]: # STATUS
-    st.markdown(f"""
-        <div class="system-card">
-            <h2 style="margin:0;">GUH MOTA</h2>
-            <p style="color:#00d4ff; margin:0;">CLASSE: {obter_classe(st.session_state.data['lvl'])} | RANK {st.session_state.data['rank']}</p>
-            <p style="margin:0;">NÍVEL {st.session_state.data['lvl']} ({st.session_state.data['xp']}/100 XP)</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
+    st.markdown(f"""<div class="system-card">
+        <h2 style="margin:0;">GUH MOTA</h2>
+        <p style="color:#00d4ff; margin:0;">CLASSE: {obter_classe(st.session_state.data['lvl'])} | RANK {st.session_state.data['rank']}</p>
+        <p style="margin:0;">NÍVEL {st.session_state.data['lvl']} ({st.session_state.data['xp']}/100 XP)</p>
+    </div>""", unsafe_allow_html=True)
     col_r, col_t = st.columns([2,1])
     with col_r:
         df_radar = pd.DataFrame(dict(r=list(st.session_state.data["stats"].values()), theta=list(st.session_state.data["stats"].keys())))
@@ -124,73 +103,47 @@ with tabs[0]: # STATUS
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 30])), paper_bgcolor="rgba(0,0,0,0)", font_color="white")
         st.plotly_chart(fig, use_container_width=True)
     with col_t:
-        for s, v in st.session_state.data["stats"].items():
-            st.write(f"**{s}:** {v}")
+        for s, v in st.session_state.data["stats"].items(): st.write(f"**{s}:** {v}")
         st.metric("PODER TOTAL", st.session_state.data['lvl'] * sum(st.session_state.data["stats"].values()))
 
 with tabs[1]: # MEDICINA
     st.subheader("🏥 INTERNATO GO")
-    if st.button("ENFERMARIA / MATERNIDADE"): 
-        ganhar_xp(20, "SEN")
-        st.session_state.data["combos"]["med"]+=1
-        salvar()
-    if st.button("PLANTÃO (12H)"): 
-        ganhar_xp(40, "VIT")
-        st.session_state.data["combos"]["med"]+=1
-        salvar()
+    if st.button("ENFERMARIA / MATERNIDADE"): ganhar_xp(20, "SEN"); st.session_state.data["combos"]["med"]+=1; salvar()
+    if st.button("PLANTÃO (12H)"): ganhar_xp(40, "VIT"); st.session_state.data["combos"]["med"]+=1; salvar()
 
-with tabs[2]: # ACADEMIA
+with tabs[2]: # ACADEMIA & ORÁCULO
     st.subheader("💪 ACADEMIA (ABCD)")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("CONCLUIR TREINO"): 
-            ganhar_xp(30, "STR")
-            st.session_state.data["combos"]["gym"]+=1
-            salvar()
+        if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); st.session_state.data["combos"]["gym"]+=1; salvar()
     with c2:
         if not st.session_state.data["descanso_usado"]:
             if st.button("🛡️ DESCANSO SEMANAL"):
-                st.session_state.data["descanso_usado"] = True
-                st.session_state.data["stats"]["VIT"]+=1
-                salvar()
-                st.rerun()
-        else:
-            st.button("DESCANSO JÁ UTILIZADO", disabled=True)
+                st.session_state.data["descanso_usado"] = True; st.session_state.data["stats"]["VIT"]+=1; salvar(); st.rerun()
+        else: st.button("DESCANSO JÁ UTILIZADO", disabled=True)
     
     st.markdown("---")
     st.subheader("🔮 O ORÁCULO")
-    relato = st.text_area("Descreva seu esforço diário:", placeholder="Ex: Hoje o plantão em GO foi foda, fiz 3 partos...")
+    relato = st.text_area("Relate o seu esforço:", placeholder="Ex: Treinei pernas e fiz 2 partos hoje...")
     
     if st.button("ENVIAR AO ORÁCULO"):
-        if model is None:
-            st.error("Oráculo Offline. Verifique o Google API Key nos Secrets.")
-        elif not relato:
-            st.warning("Escreva algo para o Oráculo julgar.")
-        else:
+        if model and relato:
             try:
-                with st.spinner("O Sistema está analisando seu relato..."):
-                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Interno Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
+                with st.spinner("Analisando..."):
+                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne APENAS um JSON: {{'xp': int, 'stat': str, 'msg': str}}"
                     res = model.generate_content(prompt)
-                    # Limpeza de resposta para garantir JSON puro
                     match = re.search(r'\{.*\}', res.text, re.DOTALL)
                     if match:
                         js = json.loads(match.group())
                         ganhar_xp(js['xp'], js['stat'])
                         st.success(js['msg'])
                         st.info(f"Ganho: +{js['xp']} XP | Atributo: +1 {js['stat']}")
-                    else:
-                        st.error("A IA não retornou um formato válido. Tente novamente.")
-            except Exception as e:
-                st.error(f"Falha na conexão: {e}")
+                    else: st.error("Erro na resposta da IA.")
+            except Exception as e: st.error(f"Falha: {e}")
+        else: st.warning("Verifique a Chave API ou o relato.")
 
-with tabs[3]:
-    st.subheader("💀 PUNIÇÕES ATIVAS")
+with tabs[3]: # PUNIÇÕES
     if st.session_state.data["penalidades"]:
-        for p in st.session_state.data["penalidades"]: 
-            st.error(f"❌ {p}")
-        if st.button("PAGUEI A DÍVIDA"): 
-            st.session_state.data["penalidades"] = []
-            salvar()
-            st.rerun()
-    else: 
-        st.success("Você está em dia com o Sistema, Monarca.")
+        for p in st.session_state.data["penalidades"]: st.error(f"❌ {p}")
+        if st.button("PAGUEI A DÍVIDA"): st.session_state.data["penalidades"] = []; salvar(); st.rerun()
+    else: st.success("Caminho limpo, Monarca.")
