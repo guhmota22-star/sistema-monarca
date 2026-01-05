@@ -85,10 +85,23 @@ def ganhar_xp(valor, stat=None):
     salvar()
 
 # --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
-api_key = st.secrets.get("GOOGLE_API_KEY") if "GOOGLE_API_KEY" in st.secrets else os.environ.get("GOOGLE_API_KEY")
+# Tenta pegar a chave dos Secrets do Streamlit
+if "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    api_key = os.environ.get("GOOGLE_API_KEY")
+
 if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    try:
+        genai.configure(api_key=api_key)
+        # Usando o nome completo do modelo para evitar o erro 'NotFound'
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"Erro ao inicializar o Oráculo: {e}")
+        model = None
+else:
+    model = None
+    st.warning("⚠️ Chave API não encontrada. O Oráculo está offline.")
 
 # --- 4. INTERFACE PRINCIPAL ---
 st.title("🔱 SISTEMA: GUH MOTA")
