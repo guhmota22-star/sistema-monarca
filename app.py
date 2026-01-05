@@ -88,10 +88,10 @@ api_key = st.secrets.get("GOOGLE_API_KEY") if "GOOGLE_API_KEY" in st.secrets els
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Nome do modelo simplificado para evitar erro NotFound
+        # Nome padrão que funciona na maioria das versões do SDK
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        st.error(f"Erro de inicialização: {e}")
         model = None
 else:
     model = None
