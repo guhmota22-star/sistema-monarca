@@ -16,7 +16,6 @@ st.markdown("""
     .stApp { background-color: #050505; color: #e0e0e0; font-family: 'Orbitron', sans-serif; }
     h1, h2, h3 { color: #00d4ff; text-shadow: 0 0 10px #00d4ff; }
     
-    /* Fix para as Abas não sobreporem no celular */
     [data-baseweb="tab-list"] {
         gap: 8px !important;
         display: flex !important;
@@ -30,7 +29,6 @@ st.markdown("""
         border-radius: 5px !important;
     }
 
-    /* Cards Estilo Solo Leveling */
     .system-card {
         border: 1px solid #00d4ff;
         padding: 20px;
@@ -85,20 +83,19 @@ def ganhar_xp(valor, stat=None):
     salvar()
 
 # --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
-# Tenta obter a chave dos Secrets do Streamlit ou do ambiente
 api_key = st.secrets.get("GOOGLE_API_KEY") if "GOOGLE_API_KEY" in st.secrets else os.environ.get("GOOGLE_API_KEY")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Ajuste no nome do modelo para evitar o erro 'NotFound'
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        # Nome do modelo simplificado para evitar erro NotFound
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        st.error(f"Erro ao inicializar o Oráculo: {e}")
+        st.error(f"Erro de conexão: {e}")
         model = None
 else:
     model = None
-    st.warning("⚠️ Chave API não configurada. O Oráculo está offline.")
+    st.warning("⚠️ Chave API não configurada nos Secrets.")
 
 # --- 4. INTERFACE PRINCIPAL ---
 st.title("🔱 SISTEMA: GUH MOTA")
@@ -111,12 +108,12 @@ def obter_classe(lvl):
 
 tabs = st.tabs(["📊 STATUS", "🩺 MEDICINA", "🏋️ ACADEMIA", "💀 PUNIÇÕES"])
 
-with tabs[0]: # STATUS RESTAURADO
+with tabs[0]: # STATUS
     st.markdown(f"""
         <div class="system-card">
             <h2 style="margin:0;">GUH MOTA</h2>
-            <p style="color:#00d4ff;">CLASSE: {obter_classe(st.session_state.data['lvl'])} | RANK {st.session_state.data['rank']}</p>
-            <p>NÍVEL {st.session_state.data['lvl']} ({st.session_state.data['xp']}/100 XP)</p>
+            <p style="color:#00d4ff; margin:0;">CLASSE: {obter_classe(st.session_state.data['lvl'])} | RANK {st.session_state.data['rank']}</p>
+            <p style="margin:0;">NÍVEL {st.session_state.data['lvl']} ({st.session_state.data['xp']}/100 XP)</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -133,46 +130,67 @@ with tabs[0]: # STATUS RESTAURADO
 
 with tabs[1]: # MEDICINA
     st.subheader("🏥 INTERNATO GO")
-    if st.button("ENFERMARIA / MATERNIDADE"): ganhar_xp(20, "SEN"); st.session_state.data["combos"]["med"]+=1; salvar()
-    if st.button("PLANTÃO (12H)"): ganhar_xp(40, "VIT"); st.session_state.data["combos"]["med"]+=1; salvar()
+    if st.button("ENFERMARIA / MATERNIDADE"): 
+        ganhar_xp(20, "SEN")
+        st.session_state.data["combos"]["med"]+=1
+        salvar()
+    if st.button("PLANTÃO (12H)"): 
+        ganhar_xp(40, "VIT")
+        st.session_state.data["combos"]["med"]+=1
+        salvar()
 
 with tabs[2]: # ACADEMIA
     st.subheader("💪 ACADEMIA (ABCD)")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); st.session_state.data["combos"]["gym"]+=1; salvar()
+        if st.button("CONCLUIR TREINO"): 
+            ganhar_xp(30, "STR")
+            st.session_state.data["combos"]["gym"]+=1
+            salvar()
     with c2:
         if not st.session_state.data["descanso_usado"]:
             if st.button("🛡️ DESCANSO SEMANAL"):
-                st.session_state.data["descanso_usado"] = True; st.session_state.data["stats"]["VIT"]+=1; salvar(); st.rerun()
+                st.session_state.data["descanso_usado"] = True
+                st.session_state.data["stats"]["VIT"]+=1
+                salvar()
+                st.rerun()
+        else:
+            st.button("DESCANSO JÁ UTILIZADO", disabled=True)
     
     st.markdown("---")
-    relato = st.text_area("🔮 RELATO AO ORÁCULO", placeholder="Fale sobre seu dia...")
-    if st.button("ENVIAR AO SISTEMA"):
-        if api_key and relato:
-            prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Interno de GO Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
-            res = model.generate_content(prompt)
-            match = re.search(r'\{.*\}', res.text, re.DOTALL)
-            if match:
-                js = json.loads(match.group())
-                ganhar_xp(js['xp'], js['stat']); st.success(js['msg'])
-                # No botão de enviar ao Oráculo, use este formato seguro:
-if st.button("ENVIAR AO SISTEMA"):
-    if model is None:
-        st.error("O Oráculo não foi inicializado corretamente. Verifique sua Chave API.")
-    elif not relato:
-        st.warning("O Oráculo exige um relato para análise.")
-    else:
-        try:
-            with st.spinner("Analisando esforço..."):
-                prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
-                res = model.generate_content(prompt)
-                # O restante do seu código de processamento JSON...
-        except Exception as e:
-            st.error(f"O Oráculo encontrou uma falha na conexão: {e}")
+    st.subheader("🔮 O ORÁCULO")
+    relato = st.text_area("Descreva seu esforço diário:", placeholder="Ex: Hoje o plantão em GO foi foda, fiz 3 partos...")
+    
+    if st.button("ENVIAR AO ORÁCULO"):
+        if model is None:
+            st.error("Oráculo Offline. Verifique o Google API Key nos Secrets.")
+        elif not relato:
+            st.warning("Escreva algo para o Oráculo julgar.")
+        else:
+            try:
+                with st.spinner("O Sistema está analisando seu relato..."):
+                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Interno Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
+                    res = model.generate_content(prompt)
+                    # Limpeza de resposta para garantir JSON puro
+                    match = re.search(r'\{.*\}', res.text, re.DOTALL)
+                    if match:
+                        js = json.loads(match.group())
+                        ganhar_xp(js['xp'], js['stat'])
+                        st.success(js['msg'])
+                        st.info(f"Ganho: +{js['xp']} XP | Atributo: +1 {js['stat']}")
+                    else:
+                        st.error("A IA não retornou um formato válido. Tente novamente.")
+            except Exception as e:
+                st.error(f"Falha na conexão: {e}")
 
 with tabs[3]:
+    st.subheader("💀 PUNIÇÕES ATIVAS")
     if st.session_state.data["penalidades"]:
-        for p in st.session_state.data["penalidades"]: st.error(f"❌ {p}")
-        if st.button("PAGUEI A DÍVIDA"): st.session_state.data["penalidades"] = []; salvar(); st.rerun()
-    else: st.success("Caminho limpo, Monarca.")
+        for p in st.session_state.data["penalidades"]: 
+            st.error(f"❌ {p}")
+        if st.button("PAGUEI A DÍVIDA"): 
+            st.session_state.data["penalidades"] = []
+            salvar()
+            st.rerun()
+    else: 
+        st.success("Você está em dia com o Sistema, Monarca.")
