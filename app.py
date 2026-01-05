@@ -1,14 +1,13 @@
 import streamlit as st
 import json
 import os
-import random
 import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import google.generativeai as genai
 import re
 
-# --- 1. CONFIGURAÇÃO DE INTERFACE & CSS ---
+# --- 1. INTERFACE & CSS ---
 st.set_page_config(page_title="SISTEMA: MONARCA", page_icon="🔱", layout="wide")
 
 st.markdown("""
@@ -64,27 +63,26 @@ def ganhar_xp(valor, stat=None):
             break
     salvar()
 
-# --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
+# --- 3. CONFIGURAÇÃO BLINDADA DO ORÁCULO ---
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
-if api_key:
+def inicializar_oraculo(key):
+    if not key: return None
     try:
-        genai.configure(api_key=api_key)
-        # NOME DO MODELO SEM PREFIXO PARA EVITAR ERRO 404
-        model = genai.GenerativeModel('gemini-1.5-flash')
-    except Exception as e:
-        st.error(f"Erro Oráculo: {e}")
-        model = None
-else:
-    model = None
+        genai.configure(api_key=key)
+        # Tenta o nome mais simples e direto
+        return genai.GenerativeModel('gemini-1.5-flash')
+    except Exception:
+        return None
 
-# --- 4. INTERFACE PRINCIPAL ---
+model = inicializar_oraculo(api_key)
+
+# --- 4. INTERFACE ---
 st.title("🔱 SISTEMA: GUH MOTA")
 
 def obter_classe(lvl):
     if lvl < 10: return "Interno: Novato da Maternidade"
     if lvl < 20: return "Interno: Vigilante Fetal"
-    if lvl < 30: return "Interno: Cavaleiro da Ocitocina"
     return "Monarca da Obstetrícia"
 
 tabs = st.tabs(["📊 STATUS", "🩺 MEDICINA", "🏋️ ACADEMIA", "💀 PUNIÇÕES"])
@@ -107,57 +105,43 @@ with tabs[0]: # STATUS
 
 with tabs[1]: # MEDICINA
     st.subheader("🏥 INTERNATO GO")
-    if st.button("ENFERMARIA / MATERNIDADE"): 
-        ganhar_xp(20, "SEN")
-        st.session_state.data["combos"]["med"]+=1
-        salvar()
-    if st.button("PLANTÃO (12H)"): 
-        ganhar_xp(40, "VIT")
-        st.session_state.data["combos"]["med"]+=1
-        salvar()
+    if st.button("ENFERMARIA / MATERNIDADE"): ganhar_xp(20, "SEN"); salvar()
+    if st.button("PLANTÃO (12H)"): ganhar_xp(40, "VIT"); salvar()
 
 with tabs[2]: # ACADEMIA & ORÁCULO
     st.subheader("💪 ACADEMIA (ABCD)")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("CONCLUIR TREINO"): 
-            ganhar_xp(30, "STR")
-            st.session_state.data["combos"]["gym"]+=1
-            salvar()
+        if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); salvar()
     with c2:
         if not st.session_state.data["descanso_usado"]:
-            if st.button("🛡️ DESCANSO SEMANAL"):
-                st.session_state.data["descanso_usado"] = True
-                st.session_state.data["stats"]["VIT"]+=1
-                salvar()
-                st.rerun()
-        else: st.button("DESCANSO JÁ UTILIZADO", disabled=True)
+            if st.button("🛡️ DESCANSO"):
+                st.session_state.data["descanso_usado"] = True; st.session_state.data["stats"]["VIT"]+=1; salvar(); st.rerun()
     
     st.markdown("---")
     st.subheader("🔮 O ORÁCULO")
-    relato = st.text_area("Relate o seu esforço:", placeholder="Ex: Treinei pernas e fiz 2 partos hoje...")
+    relato = st.text_area("Relate o esforço do Guh Mota:", placeholder="Ex: Treinei pernas e fiz 2 partos hoje...")
     
     if st.button("ENVIAR AO ORÁCULO"):
-        if model and relato:
+        if api_key and relato and model:
             try:
-                with st.spinner("Analisando..."):
-                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
+                with st.spinner("O Sistema está analisando..."):
+                    # Prompt focado em JSON puro
+                    prompt = f"Analise como o Sistema de Solo Leveling. Relato: '{relato}'. Retorne JSON: {{'xp': 10, 'stat': 'STR', 'msg': 'mensagem'}}"
                     res = model.generate_content(prompt)
                     match = re.search(r'\{.*\}', res.text, re.DOTALL)
                     if match:
                         js = json.loads(match.group())
                         ganhar_xp(js['xp'], js['stat'])
                         st.success(js['msg'])
-                        st.info(f"Ganho: +{js['xp']} XP | Atributo: +1 {js['stat']}")
-                    else: st.error("Erro na resposta da IA.")
-            except Exception as e: st.error(f"Falha na conexão: {e}")
-        else: st.warning("Verifique a Chave API ou o relato.")
+                    else: st.error("Erro no formato da resposta da IA.")
+            except Exception as e:
+                # Tenta uma segunda via se a primeira falhar
+                st.error(f"Falha de conexão: {e}. Verifique se sua chave API no AI Studio está ativa.")
+        else: st.warning("Sistema Offline: Verifique a API Key nos Secrets ou o relato.")
 
 with tabs[3]: # PUNIÇÕES
     if st.session_state.data["penalidades"]:
         for p in st.session_state.data["penalidades"]: st.error(f"❌ {p}")
-        if st.button("PAGUEI A DÍVIDA"): 
-            st.session_state.data["penalidades"] = []
-            salvar()
-            st.rerun()
+        if st.button("PAGUEI"): st.session_state.data["penalidades"] = []; salvar(); st.rerun()
     else: st.success("Caminho limpo, Monarca.")
