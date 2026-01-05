@@ -85,23 +85,20 @@ def ganhar_xp(valor, stat=None):
     salvar()
 
 # --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
-# Tenta pegar a chave dos Secrets do Streamlit
-if "GOOGLE_API_KEY" in st.secrets:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-else:
-    api_key = os.environ.get("GOOGLE_API_KEY")
+# Tenta obter a chave dos Secrets do Streamlit ou do ambiente
+api_key = st.secrets.get("GOOGLE_API_KEY") if "GOOGLE_API_KEY" in st.secrets else os.environ.get("GOOGLE_API_KEY")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Usando o nome completo do modelo para evitar o erro 'NotFound'
+        # Ajuste no nome do modelo para evitar o erro 'NotFound'
         model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"Erro ao inicializar o Oráculo: {e}")
         model = None
 else:
     model = None
-    st.warning("⚠️ Chave API não encontrada. O Oráculo está offline.")
+    st.warning("⚠️ Chave API não configurada. O Oráculo está offline.")
 
 # --- 4. INTERFACE PRINCIPAL ---
 st.title("🔱 SISTEMA: GUH MOTA")
@@ -159,6 +156,20 @@ with tabs[2]: # ACADEMIA
             if match:
                 js = json.loads(match.group())
                 ganhar_xp(js['xp'], js['stat']); st.success(js['msg'])
+                # No botão de enviar ao Oráculo, use este formato seguro:
+if st.button("ENVIAR AO SISTEMA"):
+    if model is None:
+        st.error("O Oráculo não foi inicializado corretamente. Verifique sua Chave API.")
+    elif not relato:
+        st.warning("O Oráculo exige um relato para análise.")
+    else:
+        try:
+            with st.spinner("Analisando esforço..."):
+                prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
+                res = model.generate_content(prompt)
+                # O restante do seu código de processamento JSON...
+        except Exception as e:
+            st.error(f"O Oráculo encontrou uma falha na conexão: {e}")
 
 with tabs[3]:
     if st.session_state.data["penalidades"]:
