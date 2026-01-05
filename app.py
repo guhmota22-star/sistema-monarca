@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import google.generativeai as genai
 import re
 
-# --- 1. INTERFACE & CSS ---
+# --- 1. CONFIGURAÇÃO DE INTERFACE ---
 st.set_page_config(page_title="SISTEMA: MONARCA", page_icon="🔱", layout="wide")
 
 st.markdown("""
@@ -48,7 +48,7 @@ def salvar():
 
 def ganhar_xp(valor, stat=None):
     if st.session_state.data["penalidades"]:
-        st.error("🚫 DÍVIDA ATIVA: Cumpra a punição primeiro!")
+        st.error("🚫 DÍVIDA ATIVA!")
         return
     st.session_state.data["xp"] += valor
     if stat: st.session_state.data["stats"][stat] += 1
@@ -63,45 +63,45 @@ def ganhar_xp(valor, stat=None):
             break
     salvar()
 
-# --- 3. CONFIGURAÇÃO BLINDADA DO ORÁCULO ---
+# --- 3. CONFIGURAÇÃO DINÂMICA DO ORÁCULO ---
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
-def inicializar_oraculo(key):
+@st.cache_resource
+def configurar_ia(key):
     if not key: return None
     try:
         genai.configure(api_key=key)
-        # Tenta o nome mais simples e direto
-        return genai.GenerativeModel('gemini-1.5-flash')
-    except Exception:
+        # Tenta encontrar um modelo compatível automaticamente
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                if 'gemini-1.5-flash' in m.name:
+                    return genai.GenerativeModel(m.name)
+        # Backup se não achar o Flash
+        return genai.GenerativeModel('gemini-pro')
+    except Exception as e:
+        st.error(f"Erro ao mapear modelos: {e}")
         return None
 
-model = inicializar_oraculo(api_key)
+model = configurar_ia(api_key)
 
 # --- 4. INTERFACE ---
 st.title("🔱 SISTEMA: GUH MOTA")
-
-def obter_classe(lvl):
-    if lvl < 10: return "Interno: Novato da Maternidade"
-    if lvl < 20: return "Interno: Vigilante Fetal"
-    return "Monarca da Obstetrícia"
 
 tabs = st.tabs(["📊 STATUS", "🩺 MEDICINA", "🏋️ ACADEMIA", "💀 PUNIÇÕES"])
 
 with tabs[0]: # STATUS
     st.markdown(f"""<div class="system-card">
         <h2 style="margin:0;">GUH MOTA</h2>
-        <p style="color:#00d4ff; margin:0;">CLASSE: {obter_classe(st.session_state.data['lvl'])} | RANK {st.session_state.data['rank']}</p>
-        <p style="margin:0;">NÍVEL {st.session_state.data['lvl']} ({st.session_state.data['xp']}/100 XP)</p>
+        <p style="color:#00d4ff; margin:0;">RANK {st.session_state.data['rank']} | LVL {st.session_state.data['lvl']}</p>
     </div>""", unsafe_allow_html=True)
     col_r, col_t = st.columns([2,1])
     with col_r:
         df_radar = pd.DataFrame(dict(r=list(st.session_state.data["stats"].values()), theta=list(st.session_state.data["stats"].keys())))
         fig = go.Figure(data=go.Scatterpolar(r=df_radar['r'], theta=df_radar['theta'], fill='toself', line_color='#00d4ff'))
-        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 30])), paper_bgcolor="rgba(0,0,0,0)", font_color="white")
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 30])), paper_bgcolor="rgba(0,0,0,0)", font_color="white", margin=dict(l=40, r=40, t=20, b=20))
         st.plotly_chart(fig, use_container_width=True)
     with col_t:
         for s, v in st.session_state.data["stats"].items(): st.write(f"**{s}:** {v}")
-        st.metric("PODER TOTAL", st.session_state.data['lvl'] * sum(st.session_state.data["stats"].values()))
 
 with tabs[1]: # MEDICINA
     st.subheader("🏥 INTERNATO GO")
@@ -109,36 +109,26 @@ with tabs[1]: # MEDICINA
     if st.button("PLANTÃO (12H)"): ganhar_xp(40, "VIT"); salvar()
 
 with tabs[2]: # ACADEMIA & ORÁCULO
-    st.subheader("💪 ACADEMIA (ABCD)")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); salvar()
-    with c2:
-        if not st.session_state.data["descanso_usado"]:
-            if st.button("🛡️ DESCANSO"):
-                st.session_state.data["descanso_usado"] = True; st.session_state.data["stats"]["VIT"]+=1; salvar(); st.rerun()
+    st.subheader("💪 ACADEMIA")
+    if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); salvar()
     
     st.markdown("---")
     st.subheader("🔮 O ORÁCULO")
-    relato = st.text_area("Relate o esforço do Guh Mota:", placeholder="Ex: Treinei pernas e fiz 2 partos hoje...")
+    relato = st.text_area("Relate seu esforço:", placeholder="Hoje o plantão em GO...")
     
     if st.button("ENVIAR AO ORÁCULO"):
-        if api_key and relato and model:
+        if model and relato:
             try:
                 with st.spinner("O Sistema está analisando..."):
-                    # Prompt focado em JSON puro
-                    prompt = f"Analise como o Sistema de Solo Leveling. Relato: '{relato}'. Retorne JSON: {{'xp': 10, 'stat': 'STR', 'msg': 'mensagem'}}"
-                    res = model.generate_content(prompt)
+                    res = model.generate_content(f"Analise como o Sistema de Solo Leveling. Relato: '{relato}'. Retorne JSON: {{'xp': 10, 'stat': 'STR', 'msg': 'mensagem'}}")
                     match = re.search(r'\{.*\}', res.text, re.DOTALL)
                     if match:
                         js = json.loads(match.group())
                         ganhar_xp(js['xp'], js['stat'])
                         st.success(js['msg'])
-                    else: st.error("Erro no formato da resposta da IA.")
-            except Exception as e:
-                # Tenta uma segunda via se a primeira falhar
-                st.error(f"Falha de conexão: {e}. Verifique se sua chave API no AI Studio está ativa.")
-        else: st.warning("Sistema Offline: Verifique a API Key nos Secrets ou o relato.")
+                    else: st.error("Erro no formato da IA.")
+            except Exception as e: st.error(f"Falha de conexão: {e}")
+        else: st.warning("Sistema Offline. Verifique sua Key ou o relato.")
 
 with tabs[3]: # PUNIÇÕES
     if st.session_state.data["penalidades"]:
