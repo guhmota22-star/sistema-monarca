@@ -65,13 +65,12 @@ def ganhar_xp(valor, stat=None):
     salvar()
 
 # --- 3. CONFIGURAÇÃO DA IA (ORÁCULO) ---
-# Obtendo a chave de forma segura
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Removido o prefixo 'models/' para evitar erro 404
+        # NOME DO MODELO SEM PREFIXO PARA EVITAR ERRO 404
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"Erro Oráculo: {e}")
@@ -108,18 +107,30 @@ with tabs[0]: # STATUS
 
 with tabs[1]: # MEDICINA
     st.subheader("🏥 INTERNATO GO")
-    if st.button("ENFERMARIA / MATERNIDADE"): ganhar_xp(20, "SEN"); st.session_state.data["combos"]["med"]+=1; salvar()
-    if st.button("PLANTÃO (12H)"): ganhar_xp(40, "VIT"); st.session_state.data["combos"]["med"]+=1; salvar()
+    if st.button("ENFERMARIA / MATERNIDADE"): 
+        ganhar_xp(20, "SEN")
+        st.session_state.data["combos"]["med"]+=1
+        salvar()
+    if st.button("PLANTÃO (12H)"): 
+        ganhar_xp(40, "VIT")
+        st.session_state.data["combos"]["med"]+=1
+        salvar()
 
 with tabs[2]: # ACADEMIA & ORÁCULO
     st.subheader("💪 ACADEMIA (ABCD)")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("CONCLUIR TREINO"): ganhar_xp(30, "STR"); st.session_state.data["combos"]["gym"]+=1; salvar()
+        if st.button("CONCLUIR TREINO"): 
+            ganhar_xp(30, "STR")
+            st.session_state.data["combos"]["gym"]+=1
+            salvar()
     with c2:
         if not st.session_state.data["descanso_usado"]:
             if st.button("🛡️ DESCANSO SEMANAL"):
-                st.session_state.data["descanso_usado"] = True; st.session_state.data["stats"]["VIT"]+=1; salvar(); st.rerun()
+                st.session_state.data["descanso_usado"] = True
+                st.session_state.data["stats"]["VIT"]+=1
+                salvar()
+                st.rerun()
         else: st.button("DESCANSO JÁ UTILIZADO", disabled=True)
     
     st.markdown("---")
@@ -130,7 +141,7 @@ with tabs[2]: # ACADEMIA & ORÁCULO
         if model and relato:
             try:
                 with st.spinner("Analisando..."):
-                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne APENAS um JSON: {{'xp': int, 'stat': str, 'msg': str}}"
+                    prompt = f"Aja como o Sistema de Solo Leveling. Analise o relato do Guh Mota: '{relato}'. Retorne JSON: {{'xp': int, 'stat': str, 'msg': str}}"
                     res = model.generate_content(prompt)
                     match = re.search(r'\{.*\}', res.text, re.DOTALL)
                     if match:
@@ -139,11 +150,14 @@ with tabs[2]: # ACADEMIA & ORÁCULO
                         st.success(js['msg'])
                         st.info(f"Ganho: +{js['xp']} XP | Atributo: +1 {js['stat']}")
                     else: st.error("Erro na resposta da IA.")
-            except Exception as e: st.error(f"Falha: {e}")
+            except Exception as e: st.error(f"Falha na conexão: {e}")
         else: st.warning("Verifique a Chave API ou o relato.")
 
 with tabs[3]: # PUNIÇÕES
     if st.session_state.data["penalidades"]:
         for p in st.session_state.data["penalidades"]: st.error(f"❌ {p}")
-        if st.button("PAGUEI A DÍVIDA"): st.session_state.data["penalidades"] = []; salvar(); st.rerun()
+        if st.button("PAGUEI A DÍVIDA"): 
+            st.session_state.data["penalidades"] = []
+            salvar()
+            st.rerun()
     else: st.success("Caminho limpo, Monarca.")
